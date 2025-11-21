@@ -2,8 +2,8 @@
 -- Usage: loadstring(game:HttpGet("https://cloudipv.myartsonline.com/p/loader.lua"))()
 
 -- Load SDK from server
-local SDK_URL = "https://cloudipv.myartsonline.com/p/sdk.lua"
 local PROXY_URL = "https://vapp-vexnetnetworkofficial.wasmer.app/"
+local SDK_URL = PROXY_URL .. "sdk.lua"
 
 print("[VexNet] Loading SDK...")
 

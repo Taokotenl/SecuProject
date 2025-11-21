@@ -7,11 +7,15 @@ SDK.__index = SDK
 -- Simplified constants
 local SDK_VERSION = "2.1.0"
 
-function SDK.new(proxy_url, fingerprint)
+function SDK.new(proxy_url, fingerprint, opts)
     local self = setmetatable({}, SDK)
     self.proxy_url = proxy_url
     self.fingerprint = fingerprint or "default"
     self.request_timeout = 10
+    opts = opts or {}
+    -- optional token/script_id used to identify script and provider
+    self.token = opts.token
+    self.script_id = opts.script_id
     return self
 end
 
@@ -23,58 +27,68 @@ function SDK:_makeRequest(action, data)
     data.timestamp = os.time()
     data.fingerprint = self.fingerprint
 
-    local json = HttpService:JSONEncode(data)
-    -- FIX: Use /api/action format instead of ?action=
+    local ok, json = pcall(function() return HttpService:JSONEncode(data) end)
+    if not ok then return nil, "json_encode_failed" end
+
     local url = self.proxy_url .. "/api/" .. action
 
     local body
 
-    -- Executor HTTP first (Synapse, ScriptWare, KRNL, Fluxus)
-    if syn and syn.request then
-        local res = syn.request({
-            Url = url,
-            Method = "POST",
-            Body = json,
-            Headers = {
-                ["Content-Type"] = "application/json"
-            }
-        })
-        body = res.Body
+    -- Build headers and include token/script id when available
+    local headers = { ["Content-Type"] = "application/json" }
+    if self.token then headers["X-VAPP-Token"] = tostring(self.token) end
+    if self.script_id then headers["X-Script-Id"] = tostring(self.script_id) end
 
-    elseif http_request then
-        local res = http_request({
-            Url = url,
-            Method = "POST",
-            Body = json,
-            Headers = {
-                ["Content-Type"] = "application/json"
-            }
-        })
-        body = res.Body
-
-    elseif request then
-        local res = request({
-            Url = url,
-            Method = "POST",
-            Body = json,
-            Headers = {
-                ["Content-Type"] = "application/json"
-            }
-        })
-        body = res.Body
-
-    else
-        -- Fallback Roblox PostAsync
-        body = HttpService:PostAsync(
-            url,
-            json,
-            Enum.HttpContentType.ApplicationJson
-        )
+    local function safeRequest(req)
+        local status, res = pcall(function() return req end)
+        if not status then return nil, tostring(res) end
+        return res
     end
 
-    -- decode
-    local decoded = HttpService:JSONDecode(body)
+    if syn and syn.request then
+        local res = syn.request({ Url = url, Method = "POST", Body = json, Headers = headers })
+        body = res and res.Body or nil
+
+    elseif http_request then
+        local res = http_request({ Url = url, Method = "POST", Body = json, Headers = headers })
+        body = res and res.Body or nil
+
+    elseif request then
+        local res = request({ Url = url, Method = "POST", Body = json, Headers = headers })
+        body = res and res.Body or nil
+
+    else
+        local ok2, res = pcall(function()
+            return HttpService:PostAsync(url, json, Enum.HttpContentType.ApplicationJson)
+        end)
+        if ok2 then body = res else return nil, tostring(res) end
+    end
+
+    if not body then return nil, "no_response_body" end
+
+    local dec_ok, decoded = pcall(function() return HttpService:JSONDecode(body) end)
+    if not dec_ok then return nil, "json_decode_failed:" .. tostring(decoded) end
     return decoded, nil
+end
+
+-- Lightweight tamper detection helper
+function SDK:detectTamper()
+    local tampered = false
+    if type(hookfunction) == 'function' or type(hookmetamethod) == 'function' then
+        tampered = true
+    end
+    return tampered
+end
+
+-- Sync method to fetch nodes + metadata
+function SDK:sync()
+    local resp, err = self:_makeRequest('sync', { tampered = self:detectTamper() })
+    if err then return nil, err end
+    -- mark SDK as verified when sync returns expected structure
+    if resp and (resp.nodes or resp.success) then
+        self._verified = true
+    end
+    return resp, nil
 end
 
 function SDK:checkKey(key)

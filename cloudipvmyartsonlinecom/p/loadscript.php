@@ -5,6 +5,17 @@ require_once 'database.php';
 
 header('Content-Type: application/json');
 
+// Maintenance check
+$maintenance_file = DB_PATH . 'maintenance.json';
+if (file_exists($maintenance_file)) {
+    $m = json_decode(file_get_contents($maintenance_file), true) ?? ['enabled'=>false];
+    if (!empty($m['enabled'])) {
+        http_response_code(503);
+        echo json_encode(['error' => 'MAINTENANCE']);
+        exit;
+    }
+}
+
 // Block browser access
 if (empty($_SERVER['HTTP_X_ROBLOX_SDK'])) {
     http_response_code(403);

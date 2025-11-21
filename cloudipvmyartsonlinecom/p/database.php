@@ -27,7 +27,7 @@ class Database {
         return null;
     }
     
-    public function createKey($ttl = 86400, $max_uses = 5) {
+    public function createKey($ttl = 86400, $max_uses = 5, $uuid = '') {
         $key = $this->generateKey();
         $key_data = [
             'key' => $key,
@@ -36,7 +36,8 @@ class Database {
             'uses' => 0,
             'hwid' => '',
             'ip' => $_SERVER['REMOTE_ADDR'] ?? '',
-            'created_at' => time()
+            'created_at' => time(),
+            'uuid' => $uuid
         ];
         
         if ($this->type === 'json') {
@@ -75,19 +76,25 @@ class Database {
         $scripts = json_decode(file_get_contents($file), true) ?? [];
         foreach ($scripts as $script) {
             if ($script['id'] === $script_id) {
+                // Only return enabled scripts (default to enabled if flag missing)
+                if (isset($script['enabled']) && $script['enabled'] === false) {
+                    return null;
+                }
                 return $script;
             }
         }
         return null;
     }
     
-    public function createScript($id, $code, $version = '1.0') {
+    public function createScript($id, $code, $version = '1.0', $owner_uuid = '') {
         $script = [
             'id' => $id,
             'code' => $code,
             'version' => $version,
             'created_at' => time(),
-            'encrypted' => true
+            'encrypted' => true,
+            'enabled' => true,
+            'owner_uuid' => $owner_uuid
         ];
         
         if ($this->type === 'json') {

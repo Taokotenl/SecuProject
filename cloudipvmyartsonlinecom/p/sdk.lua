@@ -106,7 +106,8 @@ function VexNetSDK:_makeRequest(action, data)
     if not url:match("/$") then
         url = url .. "/"
     end
-    url = url .. "?action=" .. action
+    -- Use API-style path so proxy/router recognizes action: /api/<action>
+    url = url .. "api/" .. action
     
     local success, response = pcall(function()
         local result = self._request_func({
@@ -114,7 +115,8 @@ function VexNetSDK:_makeRequest(action, data)
             Method = "POST",
             Headers = {
                 ["Content-Type"] = "application/json",
-                ["User-Agent"] = "VexNet-SDK/" .. VexNetSDK.VERSION
+                ["User-Agent"] = "VexNet-SDK/" .. VexNetSDK.VERSION,
+                ["X-Roblox-SDK"] = "1"
             },
             Body = jsonEncode(payload)
         })
@@ -139,6 +141,17 @@ function VexNetSDK:_makeRequest(action, data)
     end
     
     return decoded, nil
+end
+
+-- Check a key validity against the backend
+function VexNetSDK:checkKey(key)
+    if not key then return nil, 'missing_key' end
+    local response, err = self:_makeRequest('checkkey', { key = key })
+    if err then return nil, err end
+    if response and response.success and response.valid then
+        return true, response
+    end
+    return false, response
 end
 
 -- Added kick function for security violations

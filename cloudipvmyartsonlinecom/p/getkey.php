@@ -5,6 +5,17 @@ require_once 'database.php';
 
 header('Content-Type: application/json');
 
+// Maintenance check
+$maintenance_file = DB_PATH . 'maintenance.json';
+if (file_exists($maintenance_file)) {
+    $m = json_decode(file_get_contents($maintenance_file), true) ?? ['enabled'=>false];
+    if (!empty($m['enabled'])) {
+        http_response_code(503);
+        echo json_encode(['success' => false, 'error' => 'MAINTENANCE']);
+        exit;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
@@ -23,10 +34,11 @@ if (!$input) {
     exit;
 }
 
-$ttl = $input['ttl'] ?? 86400;
-$max_uses = $input['max_uses'] ?? 5;
+$ttl = $input['ttl'] ?? ($_GET['ttl'] ?? 86400);
+$max_uses = $input['max_uses'] ?? ($_GET['max_uses'] ?? 5);
 $signature = $input['signature'] ?? null;
 $timestamp = $input['timestamp'] ?? null;
+$uuid = $input['uuid'] ?? ($_GET['uuid'] ?? null);
 
 // Verify if signature is provided
 if ($signature !== null && !$crypto->verifyRequest($input, $signature, $timestamp)) {
@@ -37,7 +49,7 @@ if ($signature !== null && !$crypto->verifyRequest($input, $signature, $timestam
 }
 
 // Create key
-$new_key = $db->createKey($ttl, $max_uses);
+$new_key = $db->createKey($ttl, $max_uses, $uuid ?? '');
 $token = $crypto->generateToken($new_key);
 
 $response = [
@@ -47,6 +59,8 @@ $response = [
     'token' => $token,
     'ttl' => $ttl,
     'max_uses' => $max_uses,
+    'uuid' => $uuid ?? null,
+    'make_url' => (isset($_SERVER['HTTP_HOST']) ? (isset($_SERVER['REQUEST_SCHEME']) ? $_SERVER['REQUEST_SCHEME'] : 'https') . '://' . $_SERVER['HTTP_HOST'] : '') . dirname($_SERVER['REQUEST_URI']) . '/makekey.php?uuid=' . urlencode($uuid ?? $new_key),
     'timestamp' => time()
 ];
 

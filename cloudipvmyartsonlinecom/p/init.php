@@ -27,6 +27,20 @@ if (!file_exists($logs_file)) {
     echo "Created logs.json\n";
 }
 
+// Initialize users.json
+$users_file = DB_PATH . 'users.json';
+if (!file_exists($users_file)) {
+    file_put_contents($users_file, json_encode([], JSON_PRETTY_PRINT));
+    echo "Created users.json\n";
+}
+
+// Initialize maintenance.json
+$maintenance_file = DB_PATH . 'maintenance.json';
+if (!file_exists($maintenance_file)) {
+    file_put_contents($maintenance_file, json_encode(['enabled' => false], JSON_PRETTY_PRINT));
+    echo "Created maintenance.json\n";
+}
+
 // Add a sample script
 $scripts = json_decode(file_get_contents($scripts_file), true);
 if (empty($scripts)) {
